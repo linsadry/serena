@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serena</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300;1,9..144,400&display=swap');
+:root{
+  --ink:#18120e;--bark:#2a1e14;--amber:#8B6914;--gold:#C4952A;
+  --rust:#7B3F2A;--moss:#3D4A35;--sage:#5E6E54;--cream:#F5EDD8;
+  --surface:#F8F3E8;--white:#FDFAF4;--muted:#8E7E6A;--faint:#D8CEBC;
+  --border:#E4D8C4;--ok:#3D6B3A;--warn:#8B6914;--alert:#8B2500;
+  --ok-bg:rgba(61,107,58,.08);--warn-bg:rgba(139,105,20,.08);--alert-bg:rgba(139,37,0,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--surface);color:var(--ink);font-family:'Fraunces',serif;font-weight:300;min-height:100vh;}
+
+/* ── PIN SCREEN ── */
+#pin-screen{
+  min-height:100vh;background:var(--bark);
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+/* grain */
+#pin-screen::before{content:'';position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");background-size:200px;opacity:.4;pointer-events:none;}
+/* ambient glow */
+#pin-screen::after{content:'';position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(196,149,42,.1) 0%,transparent 65%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+
+.pin-wrap{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:0;}
+
+.pin-eyebrow{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.45em;text-transform:uppercase;color:rgba(255,255,255,.2);margin-bottom:16px;animation:fadeUp .6s ease .1s both;}
+
+.pin-title{font-size:64px;font-style:italic;font-weight:300;color:var(--cream);letter-spacing:-.01em;margin-bottom:4px;animation:fadeUp .6s ease .2s both;}
+.pin-title span{color:var(--gold);}
+
+.pin-tagline{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.18);margin-bottom:56px;animation:fadeUp .6s ease .3s both;}
+
+/* 4-dot PIN */
+.pin-dots{display:flex;gap:20px;margin-bottom:28px;animation:fadeUp .6s ease .4s both;}
+.pd{
+  width:18px;height:18px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.15);
+  background:transparent;
+  transition:background .15s,border-color .15s,transform .1s;
+  position:relative;
+}
+.pd.filled{background:var(--gold);border-color:var(--gold);}
+.pd.filled::after{content:'';position:absolute;inset:3px;border-radius:50%;background:rgba(255,255,255,.3);}
+
+/* shake on wrong PIN */
+@keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-8px);}40%{transform:translateX(8px);}60%{transform:translateX(-5px);}80%{transform:translateX(5px);}}
+.pin-dots.shake{animation:shake .4s ease;}
+
+/* success pulse */
+@keyframes goldPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+.pd.success{background:var(--gold);border-color:var(--gold);animation:goldPulse .3s ease 2;}
+
+.pin-hint{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.15em;color:rgba(255,255,255,.12);animation:fadeUp .6s ease .5s both;}
+.pin-error{font-family:'DM Mono',monospace;font-size:9px;color:rgba(255,120,80,.6);margin-top:12px;height:16px;transition:opacity .2s;opacity:0;}
+.pin-error.show{opacity:1;}
+
+/* hidden real input */
+#pin-input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── APP ── */
+#app{display:none;}
+.sidebar{width:220px;min-height:100vh;background:var(--bark);position:fixed;left:0;top:0;display:flex;flex-direction:column;padding:32px 0;z-index:100;}
+.sidebar-brand{padding:0 24px 32px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:24px;}
+.sidebar-eyebrow{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:6px;}
+.sidebar-title{font-size:22px;font-weight:300;color:var(--cream);font-style:italic;}
+.sidebar-title span{color:var(--gold);}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 24px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.4);transition:all .15s;border-left:3px solid transparent;}
+.nav-item:hover{color:var(--cream);background:rgba(255,255,255,.04);}
+.nav-item.active{color:var(--gold);border-left-color:var(--gold);background:rgba(196,149,42,.08);}
+.nav-item .ni{font-size:14px;width:20px;}
+.sidebar-bottom{margin-top:auto;padding:24px;border-top:1px solid rgba(255,255,255,.06);}
+.lock-btn{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.2);background:none;border:1px solid rgba(255,255,255,.08);padding:6px 12px;border-radius:4px;cursor:pointer;transition:all .15s;width:100%;}
+.lock-btn:hover{color:var(--cream);border-color:rgba(255,255,255,.3);}
+.content{margin-left:220px;min-height:100vh;}
+.page{display:none;padding:48px 56px 80px;}
+.page.active{display:block;}
+.page-eyebrow{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+.page-title{font-size:36px;font-weight:300;color:var(--bark);line-height:1.1;margin-bottom:8px;}
+.page-title em{font-style:italic;color:var(--gold);}
+.page-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.6;margin-bottom:40px;}
+.sec{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:12px;margin:36px 0 20px;}
+.sec::after{content:'';flex:1;height:1px;background:var(--border);}
+.card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:16px;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.score-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:32px;}
+.score-pill{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:18px 12px;text-align:center;}
+.score-pill-num{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;color:var(--bark);line-height:1;}
+.score-pill-label{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+.score-pill-max{font-family:'DM Mono',monospace;font-size:8px;color:var(--faint);}
+.score-pill.total{background:var(--bark);}
+.score-pill.total .score-pill-num{color:var(--gold);}
+.score-pill.total .score-pill-label{color:rgba(255,255,255,.4);}
+.marker-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:16px;position:relative;transition:border-color .15s;}
+.marker-card:hover{border-color:var(--gold);}
+.marker-name{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+.marker-value{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:300;color:var(--bark);}
+.marker-unit{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.marker-goal{font-family:'DM Mono',monospace;font-size:8px;color:var(--faint);margin-top:3px;}
+.marker-note{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-top:6px;font-style:italic;line-height:1.5;}
+.marker-status{width:8px;height:8px;border-radius:50%;position:absolute;top:14px;right:14px;}
+.s-ok{background:var(--ok);}.s-warn{background:var(--warn);}.s-alert{background:var(--alert);}.s-none{background:var(--faint);}
+.cat-header{display:flex;align-items:center;gap:12px;padding:20px 24px 16px;background:var(--white);border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;}
+.cat-title{font-size:18px;color:var(--bark);font-weight:300;}
+.cat-freq{margin-left:auto;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);background:var(--surface);padding:4px 10px;border-radius:20px;}
+.cat-body{background:var(--white);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;padding:16px 20px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px;}
+.dot-rating{display:flex;gap:5px;}
+.dot{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--faint);background:var(--white);cursor:pointer;transition:all .12s;}
+.dot.on{background:var(--gold);border-color:var(--gold);}
+.dot:hover{border-color:var(--gold);}
+.field-input{border:1.5px solid var(--border);border-radius:5px;padding:6px 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--ink);background:var(--surface);outline:none;transition:border-color .15s;}
+.field-input:focus{border-color:var(--gold);}
+.input-row{display:flex;gap:8px;align-items:center;margin-top:8px;}
+.health-badge{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:.1em;padding:2px 6px;border-radius:10px;background:rgba(61,107,58,.1);color:var(--ok);border:1px solid rgba(61,107,58,.2);margin-left:6px;vertical-align:middle;}
+.prog-bar{height:3px;background:var(--border);border-radius:2px;margin-top:12px;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--amber),var(--gold));border-radius:2px;transition:width .4s ease;}
+.btn-primary{padding:10px 24px;background:var(--bark);color:var(--cream);border:none;border-radius:5px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;transition:background .15s;}
+.btn-primary:hover{background:var(--amber);}
+.btn-ghost{padding:10px 20px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:5px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;transition:all .15s;}
+.btn-ghost:hover{border-color:var(--bark);color:var(--bark);}
+.actions-row{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;}
+.trend-bars{display:flex;align-items:flex-end;gap:4px;height:48px;flex:1;}
+.t-bar{flex:1;border-radius:3px 3px 0 0;min-height:3px;opacity:.7;}
+.t-bar:hover{opacity:1;}
+.data-table{width:100%;font-family:'DM Mono',monospace;font-size:10px;border-collapse:collapse;}
+.data-table th{text-align:left;padding:8px 12px;border-bottom:2px solid var(--border);color:var(--muted);font-weight:400;letter-spacing:.1em;text-transform:uppercase;font-size:8px;}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--bark);}
+.data-table tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:8px;letter-spacing:.1em;}
+.badge-high{background:var(--alert-bg);color:var(--alert);}
+.badge-med{background:var(--warn-bg);color:var(--warn);}
+.badge-low{background:var(--ok-bg);color:var(--ok);}
+.cycle-bar{display:grid;grid-template-columns:5fr 9fr 3fr 11fr;height:24px;border-radius:6px;overflow:hidden;margin-bottom:8px;}
+.ph{display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:white;}
+.ph-m{background:var(--rust);}.ph-f{background:var(--sage);}.ph-o{background:var(--gold);color:var(--bark);}.ph-l{background:var(--amber);}
+.epi-card{background:var(--white);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.epi-head{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;}
+.epi-accent{width:4px;height:40px;border-radius:2px;flex-shrink:0;}
+.epi-name{font-size:20px;color:var(--bark);}
+.epi-price{margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.epi-body{padding:20px 24px;}
+.clock-tag{font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;border-radius:20px;background:var(--surface);border:1px solid var(--border);color:var(--muted);display:inline-block;margin:2px;}
+.epi-rec{font-family:'DM Mono',monospace;font-size:9px;padding:8px 12px;background:var(--surface);border-radius:4px;color:var(--amber);border-left:3px solid var(--amber);margin-top:12px;}
+.notes-ta{width:100%;min-height:80px;border:1.5px solid var(--border);border-radius:6px;padding:12px 16px;font-family:'Fraunces',serif;font-size:14px;font-weight:300;color:var(--ink);background:var(--surface);resize:vertical;outline:none;transition:border-color .15s;line-height:1.7;}
+.notes-ta:focus{border-color:var(--gold);}
+.notes-ta::placeholder{color:var(--faint);}
+.sym-tag{font-family:'DM Mono',monospace;font-size:9px;padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);cursor:pointer;color:var(--muted);transition:all .12s;display:inline-block;margin:3px;}
+.sym-tag.on{background:var(--amber);border-color:var(--amber);color:white;}
+.toast{position:fixed;bottom:32px;right:32px;background:var(--bark);color:var(--cream);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;padding:12px 20px;border-radius:6px;z-index:999;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.health-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:12px;}
+.health-stat{text-align:center;padding:14px 8px;}
+.health-stat-num{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:300;color:var(--bark);line-height:1;}
+.health-stat-label{font-family:'DM Mono',monospace;font-size:7px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+.health-stat-unit{font-family:'DM Mono',monospace;font-size:7px;color:var(--faint);}
+.sync-time{font-family:'DM Mono',monospace;font-size:8px;color:var(--faint);text-align:right;margin-top:8px;}
+.token-box{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);word-break:break-all;margin:8px 0;line-height:1.6;}
+.copy-btn{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:.15em;text-transform:uppercase;padding:5px 14px;border:1px solid var(--border);border-radius:4px;background:var(--white);color:var(--muted);cursor:pointer;transition:all .15s;}
+.copy-btn:hover{border-color:var(--gold);color:var(--gold);}
+.code{font-family:'DM Mono',monospace;font-size:10px;background:var(--surface);padding:2px 6px;border-radius:3px;border:1px solid var(--border);color:var(--amber);}
+.shortcut-step{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px;font-size:14px;line-height:1.5;}
+.shortcut-num{font-family:'DM Mono',monospace;font-size:9px;width:22px;height:22px;border-radius:50%;background:var(--bark);color:var(--gold);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+@media(max-width:900px){
+  .sidebar{width:64px;}
+  .sidebar-brand,.nav-item span,.sidebar-eyebrow,.sidebar-title{display:none;}
+  .nav-item{justify-content:center;padding:12px 0;}
+  .content{margin-left:64px;}
+  .page{padding:32px 24px 60px;}
+  .grid-3,.grid-4{grid-template-columns:1fr 1fr;}
+  .score-grid{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:600px){
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}
+  .score-grid{grid-template-columns:repeat(2,1fr);}
+  .cat-body{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ── PIN SCREEN ── -->
+<div id="pin-screen">
+  <div class="pin-wrap">
+    <div class="pin-eyebrow">Sistema Íris</div>
+    <div class="pin-title"><span>Serena</span></div>
+    <div class="pin-tagline">Saúde &amp; Longevidade</div>
+
+    <div class="pin-dots" id="pin-dots" onclick="focusPin()">
+      <div class="pd" id="pd-0"></div>
+      <div class="pd" id="pd-1"></div>
+      <div class="pd" id="pd-2"></div>
+      <div class="pd" id="pd-3"></div>
+    </div>
+
+    <div class="pin-hint">Digite seu PIN</div>
+    <div class="pin-error" id="pin-error">PIN incorreto</div>
+  </div>
+
+  <!-- input invisível — captura teclado -->
+  <input
+    id="pin-input"
+    type="tel"
+    maxlength="4"
+    inputmode="numeric"
+    autocomplete="off"
+    pattern="[0-9]*"
+  >
+</div>
+
+<!-- ── APP ── -->
+<div id="app">
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-eyebrow">Sistema Íris</div>
+      <div class="sidebar-title"><span>Serena</span></div>
+    </div>
+    <div class="nav-item active" data-page="dashboard" onclick="nav(this)"><span class="ni">◈</span><span>Dashboard</span></div>
+    <div class="nav-item" data-page="protocol"  onclick="nav(this)"><span class="ni">◉</span><span>Protocolo</span></div>
+    <div class="nav-item" data-page="labs"       onclick="nav(this)"><span class="ni">◎</span><span>Exames</span></div>
+    <div class="nav-item" data-page="cycle"      onclick="nav(this)"><span class="ni">◐</span><span>Ciclo</span></div>
+    <div class="nav-item" data-page="epiage"     onclick="nav(this)"><span class="ni">◑</span><span>Epi-Idade</span></div>
+    <div class="nav-item" data-page="settings"   onclick="nav(this)"><span class="ni">◌</span><span>Config</span></div>
+    <div class="sidebar-bottom">
+      <button class="lock-btn" onclick="lock()">⊠ Bloquear</button>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-eyebrow">Visão geral</div>
+      <h1 class="page-title">Dashboard <em>Longevidade</em></h1>
+      <p class="page-sub">Semana atual · <span id="dash-date"></span></p>
+      <div class="score-grid">
+        <div class="score-pill"><div class="score-pill-num" id="d-sleep">–</div><div class="score-pill-label">Sono</div><div class="score-pill-max">/ 25</div></div>
+        <div class="score-pill"><div class="score-pill-num" id="d-exercise">–</div><div class="score-pill-label">Exercício</div><div class="score-pill-max">/ 25</div></div>
+        <div class="score-pill"><div class="score-pill-num" id="d-nutrition">–</div><div class="score-pill-label">Nutrição</div><div class="score-pill-max">/ 25</div></div>
+        <div class="score-pill"><div class="score-pill-num" id="d-stress">–</div><div class="score-pill-label">Estresse</div><div class="score-pill-max">/ 25</div></div>
+        <div class="score-pill total"><div class="score-pill-num" id="d-total">–</div><div class="score-pill-label">Total</div><div class="score-pill-max" style="color:rgba(255,255,255,.2)">/ 100</div></div>
+      </div>
+      <div class="sec" id="health-sec" style="display:none">Apple Saúde — hoje</div>
+      <div class="card" id="health-card" style="display:none">
+        <div class="health-row" id="health-stats"></div>
+        <div class="sync-time" id="sync-time"></div>
+      </div>
+      <div class="sec">Biomarcadores — núcleo</div>
+      <div class="grid-4" id="core-grid"></div>
+      <div class="sec">Tendência — 8 semanas</div>
+      <div class="card" id="trend-container"></div>
+      <div class="sec">Média da semana</div>
+      <div class="grid-3">
+        <div class="card"><div class="marker-name">Energia</div><div class="marker-value" id="d-energy">–</div><div class="marker-goal">escala 1–5</div></div>
+        <div class="card"><div class="marker-name">Foco</div><div class="marker-value" id="d-focus">–</div><div class="marker-goal">escala 1–5</div></div>
+        <div class="card"><div class="marker-name">Humor</div><div class="marker-value" id="d-mood">–</div><div class="marker-goal">escala 1–5</div></div>
+      </div>
+    </div>
+
+    <!-- PROTOCOL -->
+    <div class="page" id="page-protocol">
+      <div class="page-eyebrow">Protocolo diário</div>
+      <h1 class="page-title">Hábitos de <em>Longevidade</em></h1>
+      <p class="page-sub">Registro do dia · <span id="proto-date"></span></p>
+      <div class="score-grid">
+        <div class="score-pill"><div class="score-pill-num" id="p-sleep">0</div><div class="score-pill-label">Sono</div><div class="score-pill-max">/25</div></div>
+        <div class="score-pill"><div class="score-pill-num" id="p-exercise">0</div><div class="score-pill-label">Exercício</div><div class="score-pill-max">/25</div></div>
+        <div class="score-pill"><div class="score-pill-num" id="p-nutrition">0</div><div class="score-pill-label">Nutrição</div><div class="score-pill-max">/25</div></div>
+        <div class="score-pill"><div class="score-pill-num" id="p-stress">0</div><div class="score-pill-label">Estresse</div><div class="score-pill-max">/25</div></div>
+        <div class="score-pill total"><div class="score-pill-num" id="p-total">0</div><div class="score-pill-label">Total</div><div class="score-pill-max" style="color:rgba(255,255,255,.2)">/100</div></div>
+      </div>
+      <div class="sec">🌙 Sono</div>
+      <div class="card">
+        <div class="grid-2" style="gap:20px">
+          <div>
+            <div class="marker-name" style="margin-bottom:8px">Horas de sono <span class="health-badge" id="badge-sleep" style="display:none">via Saúde</span></div>
+            <div class="input-row"><input class="field-input" id="ph-sleep-h" type="number" step="0.5" min="0" max="12" placeholder="7.5" style="width:80px"><span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">h</span></div>
+            <div class="marker-note" id="sleep-detail" style="display:none;margin-top:8px"></div>
+          </div>
+          <div><div class="marker-name" style="margin-bottom:8px">Qualidade percebida</div><div class="dot-rating" id="dr-sleep"></div></div>
+        </div>
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-fixed"> Horário fixo de acordar</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-noscreen"> Sem tela 30min antes</label>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" id="pf-sleep" style="width:0%"></div></div>
+      </div>
+      <div class="sec">🏋️ Exercício</div>
+      <div class="card">
+        <div class="grid-2" style="gap:20px;margin-bottom:12px">
+          <div>
+            <div class="marker-name" style="margin-bottom:8px">Passos <span class="health-badge" id="badge-steps" style="display:none">via Saúde</span></div>
+            <div class="input-row"><input class="field-input" id="ph-steps" type="number" placeholder="8000" style="width:100px"></div>
+          </div>
+          <div>
+            <div class="marker-name" style="margin-bottom:8px">Calorias ativas <span class="health-badge" id="badge-cal" style="display:none">via Saúde</span></div>
+            <div class="input-row"><input class="field-input" id="ph-calories" type="number" placeholder="400" style="width:100px"><span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">kcal</span></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-aerobic"> Aeróbico</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-strength"> Musculação</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-mobility"> Mobilidade</label>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" id="pf-exercise" style="width:0%"></div></div>
+      </div>
+      <div class="sec">🫒 Nutrição</div>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-protein"> Meta de proteína</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-window"> Janela 12h</label>
+          <div><div class="marker-name" style="margin-bottom:6px">Plantas (semana)</div><input class="field-input" id="ph-plants" type="number" placeholder="0" min="0" style="width:70px"></div>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" id="pf-nutrition" style="width:0%"></div></div>
+      </div>
+      <div class="sec">🌿 Estresse &amp; Recuperação</div>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-sun"> Sol matinal</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-down"> Downregulation</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"><input type="checkbox" id="ph-social"> Conexão social</label>
+        </div>
+        <div class="grid-3">
+          <div><div class="marker-name" style="margin-bottom:6px">Energia</div><div class="dot-rating" id="dr-energy"></div></div>
+          <div><div class="marker-name" style="margin-bottom:6px">Foco</div><div class="dot-rating" id="dr-focus"></div></div>
+          <div><div class="marker-name" style="margin-bottom:6px">Humor</div><div class="dot-rating" id="dr-mood"></div></div>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" id="pf-stress" style="width:0%"></div></div>
+      </div>
+      <div class="sec">Notas</div>
+      <textarea class="notes-ta" id="proto-notes" placeholder="Como foi o dia, o que funcionou, o que ajustar..."></textarea>
+      <div class="actions-row">
+        <button class="btn-ghost" onclick="clearProto()">Limpar</button>
+        <button class="btn-primary" onclick="saveDaily()">Salvar dia →</button>
+      </div>
+    </div>
+
+    <!-- LABS -->
+    <div class="page" id="page-labs">
+      <div class="page-eyebrow">Painel de exames</div>
+      <h1 class="page-title">Biomarcadores <em>Femininos</em></h1>
+      <p class="page-sub">Longevidade · Cardiometabólico · Hormonal · 30–40 anos</p>
+      <div style="margin-bottom:20px"><input type="date" id="lab-date" class="field-input"><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-left:8px">Data dos exames</span></div>
+      <div id="lab-cats"></div>
+      <div class="actions-row"><button class="btn-ghost" onclick="clearLabs()">Limpar</button><button class="btn-primary" onclick="saveLabs()">Salvar exames →</button></div>
+      <div class="sec">Histórico</div>
+      <div class="card" id="lab-history"><p style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">Nenhum exame salvo ainda.</p></div>
+    </div>
+
+    <!-- CYCLE -->
+    <div class="page" id="page-cycle">
+      <div class="page-eyebrow">Saúde reprodutiva</div>
+      <h1 class="page-title">Ciclo &amp; <em>Fertilidade</em></h1>
+      <p class="page-sub">Rastreamento menstrual · Exames hormonais · Tentativa de gestação</p>
+      <div class="sec">Fases do ciclo</div>
+      <div class="card">
+        <div class="cycle-bar">
+          <div class="ph ph-m">Menstrual<br><span style="font-size:6px">D1–5</span></div>
+          <div class="ph ph-f">Folicular<br><span style="font-size:6px">D6–13</span></div>
+          <div class="ph ph-o">Ovulação<br><span style="font-size:6px">D14</span></div>
+          <div class="ph ph-l">Lútea<br><span style="font-size:6px">D15–28</span></div>
+        </div>
+        <div class="grid-3" style="margin-top:16px">
+          <div><div class="marker-name" style="margin-bottom:6px">Dia do ciclo</div><input class="field-input" id="cy-day" type="number" min="1" max="35" placeholder="1" style="width:70px"></div>
+          <div><div class="marker-name" style="margin-bottom:6px">Fase</div><select class="field-input" id="cy-phase" style="width:100%"><option value="">–</option><option value="menstrual">Menstrual</option><option value="folicular">Folicular</option><option value="ovulatorio">Ovulatório</option><option value="luteo">Lúteo</option></select></div>
+          <div><div class="marker-name" style="margin-bottom:6px">Data</div><input class="field-input" id="cy-date" type="date" style="width:100%"></div>
+        </div>
+      </div>
+      <div class="sec">Exames hormonais por momento do ciclo</div>
+      <div class="card">
+        <table class="data-table"><thead><tr><th>Exame</th><th>Quando</th><th>Meta</th><th>Relevância</th></tr></thead><tbody>
+          <tr><td>FSH</td><td>D2–D4</td><td>&lt;10 mUI/mL</td><td><span class="badge badge-high">Alta</span></td></tr>
+          <tr><td>LH</td><td>D2–D4</td><td>&lt;7 mUI/mL</td><td><span class="badge badge-med">Média</span></td></tr>
+          <tr><td>Estradiol (E2)</td><td>D2–D4</td><td>&lt;60 pg/mL</td><td><span class="badge badge-med">Média</span></td></tr>
+          <tr><td>AMH</td><td>Qualquer dia</td><td>1.5–4 ng/mL</td><td><span class="badge badge-high">Alta</span></td></tr>
+          <tr><td>Progesterona</td><td>~D21</td><td>&gt;10 ng/mL</td><td><span class="badge badge-high">Alta</span></td></tr>
+          <tr><td>TSH</td><td>Qualquer dia</td><td>1.0–2.5 mUI/L</td><td><span class="badge badge-high">Alta</span></td></tr>
+          <tr><td>Anti-TPO</td><td>Qualquer dia</td><td>&lt;35 UI/mL</td><td><span class="badge badge-high">Alta</span></td></tr>
+          <tr><td>Prolactina</td><td>Manhã, jejum</td><td>5–25 ng/mL</td><td><span class="badge badge-med">Média</span></td></tr>
+        </tbody></table>
+      </div>
+      <div class="sec">Sintomas e observações</div>
+      <div class="card">
+        <div style="margin-bottom:12px"><div class="marker-name" style="margin-bottom:8px">Sintomas</div><div id="sym-tags"></div></div>
+        <textarea class="notes-ta" id="cy-notes" placeholder="Observações sobre o ciclo, humor, libido, sintomas..."></textarea>
+        <div class="actions-row"><button class="btn-primary" onclick="saveCycle()">Salvar →</button></div>
+      </div>
+    </div>
+
+    <!-- EPIAGE -->
+    <div class="page" id="page-epiage">
+      <div class="page-eyebrow">Idade biológica</div>
+      <h1 class="page-title">Testes <em>Epigenéticos</em></h1>
+      <p class="page-sub">Comparativo de plataformas · Como interpretar melhora real</p>
+      <div class="sec">Plataformas</div>
+      <div class="grid-3" id="epi-cards"></div>
+      <div class="sec">Prioridade máxima</div>
+      <div class="card"><table class="data-table"><thead><tr><th>#</th><th>Intervenção</th><th>Impacto</th><th>Prazo</th></tr></thead><tbody>
+        <tr><td>1</td><td>Sono consistente 7–8h, horário fixo</td><td><span class="badge badge-high">Máximo</span></td><td>2–4 semanas</td></tr>
+        <tr><td>2</td><td>Exercício aeróbico regular</td><td><span class="badge badge-high">Máximo</span></td><td>4–8 semanas</td></tr>
+        <tr><td>3</td><td>Massa muscular (2–3x/sem)</td><td><span class="badge badge-high">Máximo</span></td><td>3–6 meses</td></tr>
+        <tr><td>4</td><td>Controle glicêmico</td><td><span class="badge badge-high">Alto</span></td><td>3 meses</td></tr>
+        <tr><td>5</td><td>Redução de estresse crônico</td><td><span class="badge badge-high">Alto</span></td><td>4–12 semanas</td></tr>
+      </tbody></table></div>
+      <div class="sec">Meu registro</div>
+      <div class="card">
+        <div class="grid-3" style="margin-bottom:16px">
+          <div><div class="marker-name" style="margin-bottom:6px">Data</div><input class="field-input" id="epi-date" type="date"></div>
+          <div><div class="marker-name" style="margin-bottom:6px">Plataforma</div><select class="field-input" id="epi-platform" style="width:100%"><option>TruDiagnostic</option><option>Tally Health</option><option>Elysium Index</option><option>Outro</option></select></div>
+          <div><div class="marker-name" style="margin-bottom:6px">Idade biológica</div><input class="field-input" id="epi-age" type="number" step="0.1" placeholder="32.5" style="width:80px"></div>
+        </div>
+        <div class="grid-3" style="margin-bottom:16px">
+          <div><div class="marker-name" style="margin-bottom:6px">DunedinPACE</div><input class="field-input" id="epi-pace" type="number" step="0.01" placeholder="0.85" style="width:80px"></div>
+          <div><div class="marker-name" style="margin-bottom:6px">GrimAge</div><input class="field-input" id="epi-grim" type="number" step="0.1" placeholder="30.0" style="width:80px"></div>
+          <div><div class="marker-name" style="margin-bottom:6px">PhenoAge</div><input class="field-input" id="epi-pheno" type="number" step="0.1" placeholder="29.0" style="width:80px"></div>
+        </div>
+        <textarea class="notes-ta" id="epi-notes" style="min-height:60px" placeholder="Contexto no momento do teste..."></textarea>
+        <div class="actions-row"><button class="btn-primary" onclick="saveEpi()">Salvar →</button></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="page-eyebrow">Configurações</div>
+      <h1 class="page-title">Conta &amp; <em>Sincronização</em></h1>
+      <p class="page-sub">Conecte o Atalho do iPhone para importar dados do app Saúde automaticamente.</p>
+      <div class="sec">Credenciais para o Atalho iOS</div>
+      <div class="card">
+        <div style="margin-bottom:20px">
+          <div class="marker-name" style="margin-bottom:6px">URL Supabase</div>
+          <div class="token-box" id="cfg-url"></div>
+        </div>
+        <div style="margin-bottom:20px">
+          <div class="marker-name" style="margin-bottom:6px">Anon Key</div>
+          <div class="token-box" id="cfg-anon"></div>
+          <button class="copy-btn" style="margin-top:6px" onclick="copyEl('cfg-anon')">Copiar</button>
+        </div>
+        <div>
+          <div class="marker-name" style="margin-bottom:6px">User ID (seu identificador fixo)</div>
+          <div class="token-box" id="cfg-uid"></div>
+          <button class="copy-btn" style="margin-top:6px" onclick="copyEl('cfg-uid')">Copiar</button>
+        </div>
+      </div>
+      <div class="sec">Como configurar o Atalho</div>
+      <div class="card">
+        <div class="shortcut-step"><div class="shortcut-num">1</div><div>Abra <strong>Atalhos → Novo Atalho</strong>. Nomeie <em>"Serena Sync"</em>.</div></div>
+        <div class="shortcut-step"><div class="shortcut-num">2</div><div>Adicione ações <strong>"Buscar Amostras de Saúde"</strong> para cada dado (período: <em>Ontem</em>):<br><br><code class="code">Passos · Calorias Ativas · Tempo de Exercício · Horas em Pé</code><br><code class="code">FC em Repouso · Variabilidade da FC · VO2 Máx · Saturação O₂</code><br><code class="code">Análise do Sono · Peso Corporal · Frequência Respiratória</code></div></div>
+        <div class="shortcut-step"><div class="shortcut-num">3</div><div>Adicione <strong>"Obter Conteúdo da URL"</strong>:<br><br>
+          URL: <code class="code">SUA_URL.supabase.co/rest/v1/health_sync</code><br>
+          Método: <code class="code">POST</code><br>
+          Cabeçalhos: <code class="code">apikey</code> → Anon Key &nbsp;·&nbsp; <code class="code">Content-Type</code> → <code class="code">application/json</code><br>
+          <code class="code">Prefer</code> → <code class="code">resolution=merge-duplicates</code>
+        </div></div>
+        <div class="shortcut-step"><div class="shortcut-num">4</div><div>Corpo JSON: inclua <code class="code">user_id</code> (copie o User ID acima) + <code class="code">date</code> (data de ontem) + todos os valores coletados.</div></div>
+        <div class="shortcut-step"><div class="shortcut-num">5</div><div><strong>Automação → Nova Automação Pessoal → Hora do Dia → 7h → todos os dias</strong> → selecione <em>"Serena Sync"</em> → desative "Perguntar antes de executar".</div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONFIGURAÇÃO ─────────────────────────────────
+const SUPABASE_URL  = 'https://SEU_PROJETO.supabase.co';
+const SUPABASE_ANON = 'SUA_ANON_KEY_AQUI';
+// Identificador único da usuária no banco (qualquer UUID fixo)
+// Gere um em: https://www.uuidgenerator.net/
+const USER_ID = 'COLE_SEU_UUID_AQUI';
+// PIN de acesso
+const ACCESS_PIN = '0323';
+// ──────────────────────────────────────────────────
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─── BIOMARKERS ───
+const BIOMARKERS={
+  metabolico:{label:'Metabólico & Cardiovascular',icon:'🫀',frequency:'6–12 meses',markers:{
+    glicemia_jejum:{label:'Glicemia de jejum',unit:'mg/dL',goal:'<100',ideal:[70,99],alert:126,note:'Colher após 8h de jejum'},
+    insulina_jejum:{label:'Insulina de jejum',unit:'µUI/mL',goal:'<10',ideal:[2,9.9],alert:15.1,note:'Marcador precoce de resistência'},
+    homa_ir:{label:'HOMA-IR',unit:'',goal:'<2.0',ideal:[0,1.99],alert:3,note:'Calculado: insulina×glicemia/405'},
+    hba1c:{label:'HbA1c',unit:'%',goal:'<5.4',ideal:[4,5.39],alert:5.7,note:'Média glicêmica 3 meses'},
+    colesterol_total:{label:'Colesterol total',unit:'mg/dL',goal:'<200',ideal:[150,199],alert:240,note:null},
+    hdl:{label:'HDL',unit:'mg/dL',goal:'>60',ideal:[60,120],alert:49,note:'Quanto maior melhor'},
+    ldl:{label:'LDL',unit:'mg/dL',goal:'<100',ideal:[0,99],alert:130,note:null},
+    triglicerideos:{label:'Triglicerídeos',unit:'mg/dL',goal:'<100',ideal:[0,99],alert:150,note:'Reflete carbs/álcool'},
+    apob:{label:'ApoB',unit:'mg/dL',goal:'<80',ideal:[0,79],alert:100,note:'Melhor preditor CV que LDL'},
+    lpa:{label:'Lp(a)',unit:'nmol/L',goal:'<75',ideal:[0,74],alert:125,note:'Genético — pedir 1x'},
+    acido_urico:{label:'Ácido úrico',unit:'mg/dL',goal:'<5.5',ideal:[2,5.4],alert:6.5,note:null},
+  }},
+  inflamacao:{label:'Inflamação & Envelhecimento',icon:'🔥',frequency:'6–12 meses',markers:{
+    pcr_us:{label:'PCR-us',unit:'mg/L',goal:'<1.0',ideal:[0,0.99],alert:3.1,note:'Correlaciona com GrimAge'},
+    ferritina:{label:'Ferritina',unit:'ng/mL',goal:'50–150',ideal:[50,150],alert:200,note:'>200 = inflamação'},
+    homocisteina:{label:'Homocisteína',unit:'µmol/L',goal:'<10',ideal:[0,9.9],alert:15,note:'Responde a B12/folato'},
+    vitamina_d:{label:'Vitamina D',unit:'ng/mL',goal:'40–60',ideal:[40,60],alert:19,note:'Imunidade, humor, ossos'},
+    magnesio:{label:'Magnésio',unit:'mg/dL',goal:'2.0–2.5',ideal:[2.0,2.5],alert:1.6,note:null},
+    zinco:{label:'Zinco',unit:'µg/dL',goal:'80–120',ideal:[80,120],alert:59,note:null},
+    b12:{label:'B12',unit:'pg/mL',goal:'>400',ideal:[400,900],alert:199,note:'Neuroproteção'},
+    folato:{label:'Folato',unit:'ng/mL',goal:'>10',ideal:[10,20],alert:4.9,note:'Essencial pré-concepção'},
+  }},
+  hormonal:{label:'Tireóide & Hormonal',icon:'🦋',frequency:'Anual',markers:{
+    tsh:{label:'TSH',unit:'mUI/L',goal:'1.0–2.5',ideal:[1.0,2.5],alert:4.1,note:'Meta restrita em fertilidade'},
+    t4_livre:{label:'T4 livre',unit:'ng/dL',goal:'1.0–1.5',ideal:[1.0,1.5],alert:0.7,note:null},
+    anti_tpo:{label:'Anti-TPO',unit:'UI/mL',goal:'<35',ideal:[0,34],alert:101,note:'Hashimoto'},
+    prolactina:{label:'Prolactina',unit:'ng/mL',goal:'5–25',ideal:[5,25],alert:40.1,note:'Não lactante'},
+    amh:{label:'AMH',unit:'ng/mL',goal:'1.5–4',ideal:[1.5,4],alert:0.6,note:'Reserva ovariana'},
+    fsh:{label:'FSH',unit:'mUI/mL',goal:'<10 (D3)',ideal:[2,9.9],alert:15.1,note:'Pedir D2–D4'},
+    lh:{label:'LH',unit:'mUI/mL',goal:'D3: <7',ideal:[1,6.9],alert:12.1,note:'Pedir D2–D4'},
+    e2:{label:'Estradiol (E2)',unit:'pg/mL',goal:'D3: <60',ideal:[20,59],alert:100,note:'Pedir D2–D4'},
+    progesterona_lutea:{label:'Progesterona lútea',unit:'ng/mL',goal:'>10 D21',ideal:[10,30],alert:4.9,note:'~D21'},
+  }},
+  performance:{label:'Performance & Recuperação',icon:'⚡',frequency:'6–12 meses',markers:{
+    hemoglobina:{label:'Hemoglobina',unit:'g/dL',goal:'12–16',ideal:[12,16],alert:9.9,note:null},
+    hematocrito:{label:'Hematócrito',unit:'%',goal:'36–46',ideal:[36,46],alert:32,note:null},
+    ferro:{label:'Ferro sérico',unit:'µg/dL',goal:'60–160',ideal:[60,160],alert:39,note:'Pedir com ferritina'},
+    ck:{label:'CK',unit:'U/L',goal:'<170',ideal:[0,169],alert:301,note:'Se treinando intenso'},
+    creatinina:{label:'Creatinina',unit:'mg/dL',goal:'0.5–1.1',ideal:[0.5,1.1],alert:1.3,note:null},
+    ureia:{label:'Ureia',unit:'mg/dL',goal:'15–40',ideal:[15,40],alert:56,note:null},
+    ast:{label:'AST (TGO)',unit:'U/L',goal:'<30',ideal:[0,29],alert:41,note:null},
+    alt:{label:'ALT (TGP)',unit:'U/L',goal:'<25',ideal:[0,24],alert:41,note:'Saúde hepática feminina'},
+  }}
+};
+const CORE_MARKERS=[
+  {key:'hba1c',category:'metabolico',freq:'6m'},{key:'homa_ir',category:'metabolico',freq:'6m'},
+  {key:'triglicerideos',category:'metabolico',freq:'6m'},{key:'hdl',category:'metabolico',freq:'6m'},
+  {key:'apob',category:'metabolico',freq:'6m'},{key:'pcr_us',category:'inflamacao',freq:'6m'},
+  {key:'vitamina_d',category:'inflamacao',freq:'6m'},{key:'ferritina',category:'inflamacao',freq:'6m'},
+  {key:'b12',category:'inflamacao',freq:'6m'},{key:'tsh',category:'hormonal',freq:'12m'},
+  {key:'amh',category:'hormonal',freq:'12m'},
+];
+const EPIAGE_TESTS=[
+  {name:'TruDiagnostic',clocks:['GrimAge','PhenoAge','DunedinPACE','Horvath'],best_for:'Análise avançada',price:'US$ 299–500',recommendation:'⭐ Recomendado para acompanhar intervenções',color:'#A0522D'},
+  {name:'Tally Health',clocks:['TallyAge'],best_for:'App + lifestyle',price:'US$ 129–249',recommendation:'Bom ponto de entrada',color:'#8B6914'},
+  {name:'Elysium Index',clocks:['Horvath-based'],best_for:'Mais simples',price:'US$ 229',recommendation:'Custo menor',color:'#4A5240'},
+];
+
+// ─── UTILS ───
+function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function today(){return new Date().toISOString().split('T')[0];}
+function getWeekKey(){const d=new Date(),s=new Date(d.getFullYear(),0,1),w=Math.ceil(((d-s)/86400000+s.getDay()+1)/7);return`${d.getFullYear()}-W${String(w).padStart(2,'0')}`;}
+function copyEl(id){navigator.clipboard.writeText(document.getElementById(id).textContent.trim()).then(()=>toast('Copiado ✓'));}
+
+// ─── PIN AUTH ───
+const pinInput = document.getElementById('pin-input');
+
+function focusPin(){pinInput.focus();}
+
+// auto-focus ao carregar
+window.addEventListener('load',()=>{
+  pinInput.focus();
+  // preenche settings
+  document.getElementById('cfg-url').textContent=SUPABASE_URL;
+  document.getElementById('cfg-anon').textContent=SUPABASE_ANON;
+  document.getElementById('cfg-uid').textContent=USER_ID;
+});
+
+// toca em qualquer lugar da tela do PIN → foca input
+document.getElementById('pin-screen').addEventListener('click',focusPin);
+
+pinInput.addEventListener('input',(e)=>{
+  // só números
+  pinInput.value=pinInput.value.replace(/\D/g,'');
+  const val=pinInput.value;
+
+  // atualiza dots
+  for(let i=0;i<4;i++){
+    document.getElementById('pd-'+i).classList.toggle('filled',i<val.length);
+  }
+
+  if(val.length===4){
+    if(val===ACCESS_PIN){
+      pinSuccess();
+    } else {
+      pinFail();
+    }
+  }
+});
+
+function pinSuccess(){
+  // acende todos em dourado e entra
+  for(let i=0;i<4;i++) document.getElementById('pd-'+i).classList.add('success');
+  setTimeout(bootApp,350);
+}
+
+function pinFail(){
+  const dots=document.getElementById('pin-dots');
+  dots.classList.add('shake');
+  document.getElementById('pin-error').classList.add('show');
+  setTimeout(()=>{
+    dots.classList.remove('shake');
+    document.getElementById('pin-error').classList.remove('show');
+    pinInput.value='';
+    for(let i=0;i<4;i++) document.getElementById('pd-'+i).classList.remove('filled','success');
+    pinInput.focus();
+  },600);
+}
+
+function lock(){
+  document.getElementById('app').style.display='none';
+  document.getElementById('pin-screen').style.display='flex';
+  pinInput.value='';
+  for(let i=0;i<4;i++) document.getElementById('pd-'+i).classList.remove('filled','success');
+  pinInput.focus();
+}
+
+// ─── BOOT ───
+function bootApp(){
+  document.getElementById('pin-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  const now=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'numeric',month:'short'});
+  document.getElementById('dash-date').textContent=now;
+  document.getElementById('proto-date').textContent=now;
+  document.getElementById('lab-date').value=today();
+  document.getElementById('cy-date').value=today();
+  document.getElementById('epi-date').value=today();
+  initDots();renderLabCats();renderEpiCards();renderSymTags();
+  loadDash();loadTodayProto();loadHealthSync();
+}
+
+// ─── NAV ───
+function nav(el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+el.dataset.page).classList.add('active');
+  el.classList.add('active');
+}
+
+// ─── DOTS ───
+const DR={};
+function initDots(){
+  [['dr-sleep','sleepQ'],['dr-energy','energy'],['dr-focus','focus'],['dr-mood','mood']].forEach(([id,key])=>{
+    const el=document.getElementById(id);DR[key]=0;
+    for(let i=1;i<=5;i++){const d=document.createElement('div');d.className='dot';d.onclick=()=>{DR[key]=DR[key]===i?0:i;el.querySelectorAll('.dot').forEach((x,j)=>x.classList.toggle('on',j<DR[key]));updateScore();};el.appendChild(d);}
+  });
+}
+function setDots(key,val){
+  DR[key]=val||0;
+  const id={sleepQ:'dr-sleep',energy:'dr-energy',focus:'dr-focus',mood:'dr-mood'}[key];
+  document.getElementById(id)?.querySelectorAll('.dot').forEach((x,j)=>x.classList.toggle('on',j<DR[key]));
+}
+
+// ─── HEALTH SYNC ───
+async function loadHealthSync(){
+  const{data}=await db.from('health_sync').select('*').eq('user_id',USER_ID).eq('date',today()).maybeSingle();
+  if(!data)return;
+  if(data.sleep_minutes!=null){
+    document.getElementById('ph-sleep-h').value=(data.sleep_minutes/60).toFixed(1);
+    document.getElementById('badge-sleep').style.display='inline';
+    const parts=[];
+    if(data.sleep_deep_minutes) parts.push(`Profundo ${data.sleep_deep_minutes}min`);
+    if(data.sleep_rem_minutes)  parts.push(`REM ${data.sleep_rem_minutes}min`);
+    if(data.sleep_core_minutes) parts.push(`Core ${data.sleep_core_minutes}min`);
+    if(parts.length){document.getElementById('sleep-detail').textContent=parts.join(' · ');document.getElementById('sleep-detail').style.display='block';}
+  }
+  if(data.steps!=null){document.getElementById('ph-steps').value=data.steps;document.getElementById('badge-steps').style.display='inline';}
+  if(data.active_calories!=null){document.getElementById('ph-calories').value=data.active_calories;document.getElementById('badge-cal').style.display='inline';}
+  updateScore();
+  // dashboard card
+  const stats=[
+    {v:data.steps,l:'Passos',u:''},
+    {v:data.sleep_minutes!=null?+(data.sleep_minutes/60).toFixed(1):null,l:'Sono',u:'h'},
+    {v:data.resting_hr,l:'FC repouso',u:'bpm'},
+    {v:data.hrv_ms,l:'VFC',u:'ms'},
+    {v:data.active_calories,l:'Cal ativas',u:'kcal'},
+    {v:data.exercise_minutes,l:'Exercício',u:'min'},
+    {v:data.vo2max,l:'VO₂ máx',u:''},
+    {v:data.spo2_pct,l:'SpO₂',u:'%'},
+    {v:data.weight_kg,l:'Peso',u:'kg'},
+    {v:data.stand_hours,l:'Em pé',u:'h'},
+  ].filter(s=>s.v!=null);
+  if(!stats.length)return;
+  document.getElementById('health-sec').style.display='flex';
+  document.getElementById('health-card').style.display='block';
+  document.getElementById('health-stats').innerHTML=stats.map(s=>`<div class="health-stat"><div class="health-stat-num">${s.v}</div><div class="health-stat-label">${s.l}</div><div class="health-stat-unit">${s.u}</div></div>`).join('');
+  if(data.synced_at){const t=new Date(data.synced_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});document.getElementById('sync-time').textContent=`Sincronizado às ${t}`;}
+}
+
+// ─── SCORE ───
+function updateScore(){
+  const h=parseFloat(document.getElementById('ph-sleep-h').value)||0;
+  const sR=Math.min((h>=7&&h<=9?3:h>=6?1.5:0)+(document.getElementById('ph-fixed').checked?3:0)+(document.getElementById('ph-noscreen').checked?2:0)+(DR.sleepQ||0)*.4,9);
+  const steps=parseInt(document.getElementById('ph-steps').value)||0;
+  const eR=Math.min((steps>=7500?3:steps>=5000?1.5:0)+(document.getElementById('ph-aerobic').checked?3:0)+(document.getElementById('ph-strength').checked?3:0)+(document.getElementById('ph-mobility').checked?1:0),9);
+  const pl=parseInt(document.getElementById('ph-plants').value)||0;
+  const nR=Math.min((document.getElementById('ph-protein').checked?4:0)+(document.getElementById('ph-window').checked?3:0)+(pl>=30?3:pl>=15?1.5:0),9);
+  const stR=Math.min((document.getElementById('ph-sun').checked?3:0)+(document.getElementById('ph-down').checked?3:0)+(document.getElementById('ph-social').checked?3:0),9);
+  const s=v=>Math.round((v/9)*25);
+  const sc={sleep:s(sR),exercise:s(eR),nutrition:s(nR),stress:s(stR)};
+  ['sleep','exercise','nutrition','stress'].forEach(k=>document.getElementById('p-'+k).textContent=sc[k]);
+  document.getElementById('p-total').textContent=sc.sleep+sc.exercise+sc.nutrition+sc.stress;
+  [['sleep',sR],['exercise',eR],['nutrition',nR],['stress',stR]].forEach(([k,r])=>document.getElementById('pf-'+k).style.width=`${(r/9)*100}%`);
+  return sc;
+}
+['ph-sleep-h','ph-steps','ph-plants','ph-calories'].forEach(id=>document.getElementById(id)?.addEventListener('input',updateScore));
+['ph-fixed','ph-noscreen','ph-aerobic','ph-strength','ph-mobility','ph-protein','ph-window','ph-sun','ph-down','ph-social'].forEach(id=>document.getElementById(id)?.addEventListener('change',updateScore));
+
+// ─── LOAD TODAY ───
+async function loadTodayProto(){
+  const{data}=await db.from('daily_tracking').select('*').eq('user_id',USER_ID).eq('date',today()).maybeSingle();
+  if(!data)return;
+  if(data.sleep_hours) document.getElementById('ph-sleep-h').value=data.sleep_hours;
+  if(data.steps)       document.getElementById('ph-steps').value=data.steps;
+  if(data.plants_count)document.getElementById('ph-plants').value=data.plants_count;
+  if(data.notes)       document.getElementById('proto-notes').value=data.notes;
+  const map={'ph-fixed':'sleep_fixed_time','ph-noscreen':'sleep_no_screen','ph-aerobic':'aerobic_done','ph-strength':'strength_done','ph-mobility':'mobility_done','ph-protein':'protein_met','ph-window':'eating_window_ok','ph-sun':'sun_morning','ph-down':'downregulation_done','ph-social':'social_done'};
+  Object.entries(map).forEach(([id,k])=>{if(data[k])document.getElementById(id).checked=true;});
+  ['sleepQ','energy','focus','mood'].forEach(k=>{const dbk={sleepQ:'sleep_quality',energy:'energy',focus:'focus',mood:'mood'}[k];if(data[dbk])setDots(k,data[dbk]);});
+  updateScore();
+}
+
+// ─── SAVE DAILY ───
+async function saveDaily(){
+  const sc=updateScore();
+  const row={user_id:USER_ID,date:today(),sleep_hours:parseFloat(document.getElementById('ph-sleep-h').value)||null,sleep_quality:DR.sleepQ||null,sleep_fixed_time:document.getElementById('ph-fixed').checked,sleep_no_screen:document.getElementById('ph-noscreen').checked,steps:parseInt(document.getElementById('ph-steps').value)||null,aerobic_done:document.getElementById('ph-aerobic').checked,strength_done:document.getElementById('ph-strength').checked,mobility_done:document.getElementById('ph-mobility').checked,protein_met:document.getElementById('ph-protein').checked,eating_window_ok:document.getElementById('ph-window').checked,plants_count:parseInt(document.getElementById('ph-plants').value)||null,sun_morning:document.getElementById('ph-sun').checked,downregulation_done:document.getElementById('ph-down').checked,social_done:document.getElementById('ph-social').checked,energy:DR.energy||null,focus:DR.focus||null,mood:DR.mood||null,notes:document.getElementById('proto-notes').value||null};
+  const{error}=await db.from('daily_tracking').upsert(row,{onConflict:'user_id,date'});
+  const wk={user_id:USER_ID,week_key:getWeekKey(),year:new Date().getFullYear(),week_num:parseInt(getWeekKey().split('W')[1]),score_sleep:sc.sleep,score_exercise:sc.exercise,score_nutrition:sc.nutrition,score_stress:sc.stress,score_total:sc.sleep+sc.exercise+sc.nutrition+sc.stress};
+  await db.from('weekly_scores').upsert(wk,{onConflict:'user_id,week_key'});
+  if(!error)toast('Dia salvo ✓');else toast('Erro: '+error.message);
+}
+function clearProto(){
+  ['ph-sleep-h','ph-steps','ph-plants','ph-calories','proto-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['ph-fixed','ph-noscreen','ph-aerobic','ph-strength','ph-mobility','ph-protein','ph-window','ph-sun','ph-down','ph-social'].forEach(id=>{const el=document.getElementById(id);if(el)el.checked=false;});
+  Object.keys(DR).forEach(k=>DR[k]=0);document.querySelectorAll('.dot').forEach(d=>d.classList.remove('on'));
+  ['badge-sleep','badge-steps','badge-cal'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('sleep-detail').style.display='none';updateScore();
+}
+
+// ─── LABS ───
+function renderLabCats(){
+  const c=document.getElementById('lab-cats');c.innerHTML='';
+  Object.entries(BIOMARKERS).forEach(([ck,cat])=>{
+    const hd=document.createElement('div');hd.className='cat-header';
+    hd.innerHTML=`<span style="font-size:20px">${cat.icon}</span><span class="cat-title">${cat.label}</span><span class="cat-freq">${cat.frequency}</span>`;
+    const bd=document.createElement('div');bd.className='cat-body';
+    Object.entries(cat.markers).forEach(([mk,m])=>{const card=document.createElement('div');card.className='marker-card';card.innerHTML=`<div class="marker-name">${m.label}</div><div class="input-row"><input class="field-input" id="lab-${mk}" type="number" step="0.01" placeholder="–" style="width:80px"><span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">${m.unit}</span></div><div class="marker-goal">meta: ${m.goal}</div>${m.note?`<div class="marker-note">${m.note}</div>`:''}`;bd.appendChild(card);});
+    c.appendChild(hd);c.appendChild(bd);
+  });loadLabHist();
+}
+function clearLabs(){document.querySelectorAll('[id^="lab-"]').forEach(el=>{if(el.tagName==='INPUT')el.value='';});}
+async function saveLabs(){
+  const row={user_id:USER_ID,date:document.getElementById('lab-date').value||today(),category:'completo',saved:new Date().toISOString()};
+  Object.keys(BIOMARKERS).forEach(ck=>Object.keys(BIOMARKERS[ck].markers).forEach(mk=>{const el=document.getElementById('lab-'+mk);if(el&&el.value)row[mk]=parseFloat(el.value);}));
+  if(row.insulina_jejum&&row.glicemia_jejum)row.homa_ir=Math.round(row.insulina_jejum*row.glicemia_jejum/405*100)/100;
+  const{error}=await db.from('lab_results').insert(row);
+  if(!error){toast('Exames salvos ✓');loadLabHist();}else toast('Erro: '+error.message);
+}
+function getStatus(val,m){if(val==null)return'none';if(!m.ideal)return'none';if(val>=m.ideal[0]&&val<=m.ideal[1])return'ok';if(m.alert&&(m.alert>10?val>=m.alert:val<=m.alert))return'alert';return'warn';}
+async function loadLabHist(){
+  const{data}=await db.from('lab_results').select('*').eq('user_id',USER_ID).order('date',{ascending:false}).limit(5);
+  const el=document.getElementById('lab-history');
+  if(!data||!data.length){el.innerHTML='<p style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">Nenhum exame salvo ainda.</p>';return;}
+  const priority=['hba1c','homa_ir','pcr_us','vitamina_d','ferritina','triglicerideos','hdl','apob','tsh','amh'];
+  el.innerHTML=data.map(e=>{const badges=priority.filter(k=>e[k]!=null).map(k=>{const cat=Object.keys(BIOMARKERS).find(c=>BIOMARKERS[c].markers[k]);if(!cat)return'';const m=BIOMARKERS[cat].markers[k];const st=getStatus(e[k],m);const col={ok:'var(--ok)',warn:'var(--warn)',alert:'var(--alert)',none:'var(--muted)'}[st];return`<span style="font-family:'DM Mono',monospace;font-size:8px;padding:2px 8px;border-radius:20px;border:1px solid ${col};color:${col}">${m.label}: ${e[k]} ${m.unit}</span>`;}).join('');return`<div style="padding:12px 0;border-bottom:1px solid var(--border)"><div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:6px">${e.date}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${badges}</div></div>`;}).join('');
+}
+
+// ─── EPI ───
+function renderEpiCards(){const c=document.getElementById('epi-cards');c.innerHTML='';EPIAGE_TESTS.forEach(t=>{const card=document.createElement('div');card.className='epi-card';card.innerHTML=`<div class="epi-head"><div class="epi-accent" style="background:${t.color}"></div><div><div class="epi-name">${t.name}</div><div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-top:2px">${t.best_for}</div></div><div class="epi-price">${t.price}</div></div><div class="epi-body"><div>${t.clocks.map(c=>`<span class="clock-tag">${c}</span>`).join('')}</div><div class="epi-rec">${t.recommendation}</div></div>`;c.appendChild(card);});}
+async function saveEpi(){
+  const row={user_id:USER_ID,date:document.getElementById('epi-date').value,platform:document.getElementById('epi-platform').value,bio_age:parseFloat(document.getElementById('epi-age').value)||null,pace:parseFloat(document.getElementById('epi-pace').value)||null,grim:parseFloat(document.getElementById('epi-grim').value)||null,pheno:parseFloat(document.getElementById('epi-pheno').value)||null,notes:document.getElementById('epi-notes').value};
+  await db.from('epi_results').insert(row);toast('Teste salvo ✓');
+}
+
+// ─── CYCLE ───
+const selSym=new Set();
+function renderSymTags(){const c=document.getElementById('sym-tags');['Cólica','Inchaço','Acne','Irritabilidade','Fadiga','Insônia','Cefaleia','Libido elevada','Libido reduzida','Retenção hídrica','Ansiedade','Sensibilidade mamária'].forEach(s=>{const t=document.createElement('span');t.className='sym-tag';t.textContent=s;t.onclick=()=>{if(selSym.has(s)){selSym.delete(s);t.classList.remove('on');}else{selSym.add(s);t.classList.add('on');}};c.appendChild(t);});}
+async function saveCycle(){
+  const row={user_id:USER_ID,date:document.getElementById('cy-date').value||today(),cycle_day:parseInt(document.getElementById('cy-day').value)||null,cycle_phase:document.getElementById('cy-phase').value||null,cycle_symptoms:[...selSym],notes:document.getElementById('cy-notes').value||null};
+  await db.from('daily_tracking').upsert(row,{onConflict:'user_id,date'});toast('Ciclo salvo ✓');
+}
+
+// ─── DASHBOARD ───
+async function loadDash(){
+  const{data:labs}=await db.from('lab_results').select('*').eq('user_id',USER_ID).order('date',{ascending:false}).limit(1);
+  renderCoreGrid(labs?.[0]);
+  const{data:wk}=await db.from('weekly_scores').select('*').eq('user_id',USER_ID).order('week_key',{ascending:true}).limit(8);
+  const sorted=wk||[];renderTrends(sorted);
+  if(sorted.length){const l=sorted[sorted.length-1];['sleep','exercise','nutrition','stress'].forEach(k=>document.getElementById('d-'+k).textContent=l['score_'+k]??'–');document.getElementById('d-total').textContent=l.score_total??'–';}
+  const{data:daily}=await db.from('daily_tracking').select('energy,focus,mood').eq('user_id',USER_ID).order('date',{ascending:false}).limit(7);
+  if(daily&&daily.length){const avg=k=>{const v=daily.filter(d=>d[k]).map(d=>d[k]);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):'–';};['energy','focus','mood'].forEach(k=>document.getElementById('d-'+k).textContent=avg(k));}
+}
+function renderCoreGrid(lab){
+  const g=document.getElementById('core-grid');g.innerHTML='';
+  CORE_MARKERS.forEach(({key,category,freq})=>{const m=BIOMARKERS[category]?.markers[key];if(!m)return;const val=lab?.[key];const st=getStatus(val,m);const cls={ok:'s-ok',warn:'s-warn',alert:'s-alert',none:'s-none'}[st];const card=document.createElement('div');card.className='marker-card';card.innerHTML=`<div class="marker-status ${cls}"></div><div class="marker-name">${m.label}</div><div style="display:flex;align-items:baseline;gap:4px"><span class="marker-value">${val??'–'}</span><span class="marker-unit">${m.unit}</span></div><div class="marker-goal">meta: ${m.goal}</div><div class="marker-goal" style="margin-top:2px;color:var(--faint)">${freq}</div>`;g.appendChild(card);});
+}
+function renderTrends(wk){
+  const c=document.getElementById('trend-container');
+  const pillars=[{k:'score_sleep',l:'Sono',col:'#3D4A35'},{k:'score_exercise',l:'Exercício',col:'#9B4E1F'},{k:'score_nutrition',l:'Nutrição',col:'#C4952A'},{k:'score_stress',l:'Estresse',col:'#5E6E54'}];
+  c.innerHTML=pillars.map(p=>{const bars=wk.length?wk.map(w=>`<div class="t-bar" style="background:${p.col};height:${Math.max(((w[p.k]||0)/25)*100,4)}%" title="${w.week_key}: ${w[p.k]||0}pts"></div>`).join(''):Array(8).fill(`<div class="t-bar" style="background:var(--faint);height:${Math.round(Math.random()*40+10)}%"></div>`).join('');const delta=wk.length>=2?(wk[wk.length-1][p.k]||0)-(wk[wk.length-2][p.k]||0):null;const ds=delta===null?'–':delta>0?`+${delta}`:delta===0?'=':String(delta);const dc=delta===null?'var(--muted)':delta>0?'var(--ok)':delta<0?'var(--alert)':'var(--muted)';return`<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)"><div style="width:90px;font-family:'DM Mono',monospace;font-size:10px;color:var(--bark)">${p.l}</div><div class="trend-bars">${bars}</div><div style="font-family:'DM Mono',monospace;font-size:10px;width:40px;text-align:right;color:${dc}">${ds}</div></div>`;}).join('');
+}
+</script>
+</body>
+</html>
